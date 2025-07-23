@@ -72,20 +72,25 @@ jobs:
         pip install -r requirements.txt
         pip install pytest pytest-asyncio pytest-mock
 
+    - name: Install Redis tools
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y redis-tools
+
     - name: Wait for services
       run: |
         echo "Waiting for PostgreSQL..."
-        until pg_isready -h localhost -p 5432 -U qgjob_user; do
+        timeout 60 bash -c 'until pg_isready -h localhost -p 5432 -U qgjob_user; do
           echo "PostgreSQL is unavailable - sleeping"
           sleep 1
-        done
+        done'
         echo "PostgreSQL is up!"
-        
+
         echo "Waiting for Redis..."
-        until redis-cli -h localhost -p 6379 ping; do
+        timeout 60 bash -c 'until redis-cli -h localhost -p 6379 ping > /dev/null 2>&1; do
           echo "Redis is unavailable - sleeping"
           sleep 1
-        done
+        done'
         echo "Redis is up!"
 
     - name: Set up environment
