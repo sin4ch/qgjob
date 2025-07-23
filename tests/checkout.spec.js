@@ -1,10 +1,10 @@
-const { test, expect } = require('@playwright/test');
+import { test, expect } from "appwright";
 
-test('checkout process', async ({ page }) => {
-  await page.goto('https://example.com/checkout');
-  await page.fill('[data-testid="card-number"]', '4111111111111111');
-  await page.fill('[data-testid="expiry"]', '12/25');
-  await page.fill('[data-testid="cvv"]', '123');
-  await page.click('[data-testid="pay-button"]');
-  await expect(page.locator('[data-testid="success"]')).toBeVisible();
+test('checkout process', async ({ device }) => {
+  await device.goto('https://example.com/checkout');
+  await device.getByTestId('card-number').fill('4111111111111111');
+  await device.getByTestId('expiry').fill('12/25');
+  await device.getByTestId('cvv').fill('123');
+  await device.getByTestId('pay-button').tap();
+  await expect(device.getByTestId('success')).toBeVisible();
 });

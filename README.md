@@ -1,6 +1,8 @@
 # QualGent Job Orchestrator
 
-A production-ready job orchestration system for managing and executing automated tests on BrowserStack. This system provides a complete solution for queuing, processing, and monitoring test jobs with support for web and mobile app testing.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+A production-ready job orchestration system for managing and executing AppWright automated tests on BrowserStack. This system provides a complete solution for queuing, processing, and monitoring AppWright test jobs with support for web and mobile app testing.
 
 ## Features
 
@@ -158,6 +160,51 @@ python -m src.qgjob.worker
 
 **Note:** Both processes must be running for the system to function properly.
 
+## Continuous Integration/Continuous Deployment (CI/CD)
+
+This project includes a comprehensive GitHub Actions workflow that automatically tests the entire application stack.
+
+### CI/CD Features
+
+- **Automated Testing**: Full end-to-end testing with PostgreSQL and Redis
+- **BrowserStack Integration**: Production testing with real BrowserStack credentials
+- **Service Validation**: Comprehensive validation of all application components
+- **Artifact Collection**: Automatic collection of logs and test reports
+
+### Workflow Triggers
+
+The CI/CD pipeline runs automatically on:
+- Push to `main` or `develop` branches
+- Pull requests to `main` branch
+- Manual workflow dispatch
+
+### Setting Up CI/CD
+
+1. **Configure GitHub Secrets** (required):
+   ```
+   BROWSERSTACK_USERNAME: your_browserstack_username
+   BROWSERSTACK_ACCESS_KEY: your_browserstack_access_key
+   ```
+
+2. **View Workflow Status**:
+   - Check the badge above for current build status
+   - Visit the Actions tab in your GitHub repository
+
+3. **Review Test Results**:
+   - Workflow generates comprehensive test reports
+   - Application logs are automatically collected as artifacts
+
+
+### For Contributors
+
+When contributing to this project:
+1. **All pull requests** trigger the CI/CD pipeline
+2. **Tests must pass** before merging
+3. **Review artifacts** if tests fail for debugging information
+4. **Follow the workflow** for consistent development practices
+
+The CI/CD pipeline ensures that all changes are thoroughly tested in a production-like environment before deployment.
+
 ## Usage
 
 ### CLI Commands
@@ -210,6 +257,17 @@ curl http://localhost:8000/health
 - **emulator**: Mobile app testing on emulators via BrowserStack
 
 All targets require valid BrowserStack credentials.
+
+## Example AppWright Test Files
+
+The project includes sample AppWright test files for demonstration:
+
+- `tests/onboarding.spec.js` - User onboarding flow test
+- `tests/login.spec.js` - Login functionality test
+- `tests/checkout.spec.js` - Checkout process test
+- `tests/wikipedia.spec.js` - Wikipedia search and verification test (AppWright reference implementation)
+
+These test files demonstrate the expected format for AppWright tests that can be submitted to the job orchestrator.
 
 ## Production Deployment
 

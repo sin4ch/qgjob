@@ -1,9 +1,9 @@
-const { test, expect } = require('@playwright/test');
+import { test, expect } from "appwright";
 
-test('user onboarding flow', async ({ page }) => {
-  await page.goto('https://example.com');
-  await page.click('[data-testid="get-started"]');
-  await page.fill('[data-testid="email"]', 'test@example.com');
-  await page.click('[data-testid="submit"]');
-  await expect(page.locator('[data-testid="welcome"]')).toBeVisible();
+test('user onboarding flow', async ({ device }) => {
+  await device.goto('https://example.com');
+  await device.getByTestId('get-started').tap();
+  await device.getByTestId('email').fill('test@example.com');
+  await device.getByTestId('submit').tap();
+  await expect(device.getByTestId('welcome')).toBeVisible();
 });
