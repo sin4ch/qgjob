@@ -1,7 +1,7 @@
 # QualGent Job Orchestrator
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![CI/CD](https://github.com/sin4ch/qgjob/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/qualgent/qgjob/actions/workflows/ci-cd.yml)
+[![CI/CD](https://github.com/sin4ch/qgjob/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/sin4ch/qgjob/actions/workflows/ci-cd.yml)
 
 A production-ready job orchestration system for managing and executing AppWright automated tests on BrowserStack. Provides complete job queuing, processing, and monitoring for web and mobile app testing.
 
