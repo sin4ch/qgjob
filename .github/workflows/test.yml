@@ -1,0 +1,101 @@
+name: AppWright Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  run-tests:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: qgjob
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:6-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+      
+      - name: Start API server
+        run: |
+          export DATABASE_URL=postgresql://postgres:password@localhost:5432/qgjob
+          export REDIS_URL=redis://localhost:6379
+          python -m qgjob.main &
+          sleep 10
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/qgjob
+          REDIS_URL: redis://localhost:6379
+      
+      - name: Start worker
+        run: |
+          export DATABASE_URL=postgresql://postgres:password@localhost:5432/qgjob
+          export REDIS_URL=redis://localhost:6379
+          python -m qgjob.worker &
+          sleep 5
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/qgjob
+          REDIS_URL: redis://localhost:6379
+      
+      - name: Submit test jobs
+        run: |
+          export QGJOB_API_URL=http://localhost:8000
+          
+          qgjob submit --org-id=qualgent --app-version-id=xyz123 --test=tests/onboarding.spec.js --priority=1
+          qgjob submit --org-id=qualgent --app-version-id=xyz123 --test=tests/login.spec.js --priority=2
+          qgjob submit --org-id=qualgent --app-version-id=abc456 --test=tests/checkout.spec.js --priority=1
+        env:
+          QGJOB_API_URL: http://localhost:8000
+      
+      - name: Wait for jobs to complete
+        run: |
+          export QGJOB_API_URL=http://localhost:8000
+          
+          jobs=$(qgjob list --org-id=qualgent | tail -n +3 | awk '{print $1}')
+          
+          for job_id in $jobs; do
+            if [ ! -z "$job_id" ] && [ "$job_id" != "-" ]; then
+              echo "Waiting for job: $job_id"
+              qgjob wait --job-id=$job_id --timeout=120
+            fi
+          done
+        env:
+          QGJOB_API_URL: http://localhost:8000
+      
+      - name: Check final status
+        run: |
+          export QGJOB_API_URL=http://localhost:8000
+          qgjob list --org-id=qualgent
+        env:
+          QGJOB_API_URL: http://localhost:8000

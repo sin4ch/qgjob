@@ -1,0 +1,6 @@
+include README.md
+include requirements.txt
+include config/.env.example
+recursive-include tests *.js
+recursive-include .github *.yml
+recursive-include scripts *.sh

@@ -1,0 +1,106 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: qgjob
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://postgres:password@postgres:5432/qgjob
+      REDIS_URL: redis://redis:6379
+      BROWSERSTACK_USERNAME: ${BROWSERSTACK_USERNAME}
+      BROWSERSTACK_ACCESS_KEY: ${BROWSERSTACK_ACCESS_KEY}
+      BUILD_NAME: ${BUILD_NAME:-QualGent-Docker-Build}
+      PROJECT_NAME: ${PROJECT_NAME:-QualGent}
+      APP_STORAGE_DIR: /app/apps
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - app_storage:/app/apps
+      - ./logs:/app/logs
+    restart: unless-stopped
+
+  worker:
+    build: .
+    command: python -m qgjob.worker
+    environment:
+      DATABASE_URL: postgresql://postgres:password@postgres:5432/qgjob
+      REDIS_URL: redis://redis:6379
+      BROWSERSTACK_USERNAME: ${BROWSERSTACK_USERNAME}
+      BROWSERSTACK_ACCESS_KEY: ${BROWSERSTACK_ACCESS_KEY}
+      BUILD_NAME: ${BUILD_NAME:-QualGent-Docker-Build}
+      PROJECT_NAME: ${PROJECT_NAME:-QualGent}
+      APP_STORAGE_DIR: /app/apps
+      MAX_JOB_RETRIES: ${MAX_JOB_RETRIES:-3}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - app_storage:/app/apps
+      - ./logs:/app/logs
+    restart: unless-stopped
+    deploy:
+      replicas: 2
+
+  worker-monitor:
+    build: .
+    command: python -m qgjob.worker --worker-id=monitor
+    environment:
+      DATABASE_URL: postgresql://postgres:password@postgres:5432/qgjob
+      REDIS_URL: redis://redis:6379
+      BROWSERSTACK_USERNAME: ${BROWSERSTACK_USERNAME}
+      BROWSERSTACK_ACCESS_KEY: ${BROWSERSTACK_ACCESS_KEY}
+      BUILD_NAME: ${BUILD_NAME:-QualGent-Docker-Build}
+      PROJECT_NAME: ${PROJECT_NAME:-QualGent}
+      APP_STORAGE_DIR: /app/apps
+      MAX_JOB_RETRIES: ${MAX_JOB_RETRIES:-3}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - app_storage:/app/apps
+      - ./logs:/app/logs
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  app_storage:
