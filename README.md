@@ -211,7 +211,7 @@ The CI/CD pipeline ensures that all changes are thoroughly tested in a productio
 
 **Submit a Job:**
 ```bash
-qgjob submit --org-id "my-org" --app-version-id "v1.0.0" --test "login.spec.js" --priority 1 --target browserstack
+qgjob submit --org-id "my-org" --app-version-id "v1.0.0" --test "wikipedia.spec.js" --priority 1 --target browserstack
 ```
 
 **Check Job Status:**
@@ -238,8 +238,8 @@ curl -X POST http://localhost:8000/jobs \
   -H "Content-Type: application/json" \
   -d '{
     "org_id": "my-org",
-    "app_version_id": "v1.0.0", 
-    "test_path": "login.spec.js",
+    "app_version_id": "v1.0.0",
+    "test_path": "wikipedia.spec.js",
     "priority": 1,
     "target": "browserstack"
   }'
@@ -258,16 +258,13 @@ curl http://localhost:8000/health
 
 All targets require valid BrowserStack credentials.
 
-## Example AppWright Test Files
+## Example AppWright Test File
 
-The project includes sample AppWright test files for demonstration:
+The project includes a sample AppWright test file for demonstration:
 
-- `tests/onboarding.spec.js` - User onboarding flow test
-- `tests/login.spec.js` - Login functionality test
-- `tests/checkout.spec.js` - Checkout process test
 - `tests/wikipedia.spec.js` - Wikipedia search and verification test (AppWright reference implementation)
 
-These test files demonstrate the expected format for AppWright tests that can be submitted to the job orchestrator.
+This test file demonstrates the expected format for AppWright tests that can be submitted to the job orchestrator.
 
 ## Production Deployment
 

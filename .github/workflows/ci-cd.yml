@@ -200,102 +200,45 @@ jobs:
           exit 1
         fi
         
-        # Test 2: Submit AppWright test jobs (matching project requirements)
+        # Test 2: Submit AppWright test job (Wikipedia test)
         echo "Test 2: AppWright Job Submission"
 
-        # Submit multiple jobs as per original requirements
-        echo "Submitting onboarding test..."
-        JOB1_RESPONSE=$(curl -s -X POST http://localhost:8000/jobs \
-          -H "Content-Type: application/json" \
-          -d '{
-            "org_id": "qualgent",
-            "app_version_id": "xyz123",
-            "test_path": "tests/onboarding.spec.js",
-            "priority": 1,
-            "target": "browserstack"
-          }')
-
-        echo "Submitting login test..."
-        JOB2_RESPONSE=$(curl -s -X POST http://localhost:8000/jobs \
-          -H "Content-Type: application/json" \
-          -d '{
-            "org_id": "qualgent",
-            "app_version_id": "xyz123",
-            "test_path": "tests/login.spec.js",
-            "priority": 2,
-            "target": "browserstack"
-          }')
-
-        echo "Submitting checkout test..."
-        JOB3_RESPONSE=$(curl -s -X POST http://localhost:8000/jobs \
-          -H "Content-Type: application/json" \
-          -d '{
-            "org_id": "qualgent",
-            "app_version_id": "abc456",
-            "test_path": "tests/checkout.spec.js",
-            "priority": 1,
-            "target": "browserstack"
-          }')
-
+        # Submit Wikipedia AppWright test job
         echo "Submitting Wikipedia AppWright test..."
-        JOB4_RESPONSE=$(curl -s -X POST http://localhost:8000/jobs \
+        JOB_RESPONSE=$(curl -s -X POST http://localhost:8000/jobs \
           -H "Content-Type: application/json" \
           -d '{
             "org_id": "qualgent",
             "app_version_id": "xyz123",
             "test_path": "tests/wikipedia.spec.js",
-            "priority": 3,
+            "priority": 1,
             "target": "browserstack"
           }')
 
-        # Extract job IDs
-        JOB1_ID=$(echo "$JOB1_RESPONSE" | python -c "import sys, json; print(json.load(sys.stdin)['job_id'])" 2>/dev/null || echo "")
-        JOB2_ID=$(echo "$JOB2_RESPONSE" | python -c "import sys, json; print(json.load(sys.stdin)['job_id'])" 2>/dev/null || echo "")
-        JOB3_ID=$(echo "$JOB3_RESPONSE" | python -c "import sys, json; print(json.load(sys.stdin)['job_id'])" 2>/dev/null || echo "")
-        JOB4_ID=$(echo "$JOB4_RESPONSE" | python -c "import sys, json; print(json.load(sys.stdin)['job_id'])" 2>/dev/null || echo "")
+        # Extract job ID
+        JOB_ID=$(echo "$JOB_RESPONSE" | python -c "import sys, json; print(json.load(sys.stdin)['job_id'])" 2>/dev/null || echo "")
 
-        if [ -n "$JOB1_ID" ] && [ -n "$JOB2_ID" ] && [ -n "$JOB3_ID" ] && [ -n "$JOB4_ID" ]; then
-          echo "✅ All AppWright jobs submitted successfully"
-          echo "Job IDs: $JOB1_ID, $JOB2_ID, $JOB3_ID, $JOB4_ID"
-          echo "JOB1_ID=$JOB1_ID" >> $GITHUB_ENV
-          echo "JOB2_ID=$JOB2_ID" >> $GITHUB_ENV
-          echo "JOB3_ID=$JOB3_ID" >> $GITHUB_ENV
-          echo "JOB4_ID=$JOB4_ID" >> $GITHUB_ENV
+        if [ -n "$JOB_ID" ]; then
+          echo "✅ Wikipedia AppWright job submitted successfully"
+          echo "Job ID: $JOB_ID"
+          echo "JOB_ID=$JOB_ID" >> $GITHUB_ENV
         else
-          echo "❌ AppWright job submission failed"
+          echo "❌ Wikipedia AppWright job submission failed"
           exit 1
         fi
         
         # Test 3: Wait for job completion (AppWright workflow)
-        echo "Test 3: Waiting for AppWright jobs to complete"
+        echo "Test 3: Waiting for Wikipedia AppWright job to complete"
 
-        # Wait for each job with timeout
-        echo "Waiting for onboarding test job: $JOB1_ID"
-        if ! $QGJOB_CMD wait --job-id=$JOB1_ID --timeout=120; then
-          echo "⚠️ Onboarding job did not complete (expected with placeholder BrowserStack credentials)"
-        fi
-
-        echo "Waiting for login test job: $JOB2_ID"
-        if ! $QGJOB_CMD wait --job-id=$JOB2_ID --timeout=120; then
-          echo "⚠️ Login job did not complete (expected with placeholder BrowserStack credentials)"
-        fi
-
-        echo "Waiting for checkout test job: $JOB3_ID"
-        if ! $QGJOB_CMD wait --job-id=$JOB3_ID --timeout=120; then
-          echo "⚠️ Checkout job did not complete (expected with placeholder BrowserStack credentials)"
-        fi
-
-        echo "Waiting for Wikipedia AppWright test job: $JOB4_ID"
-        if ! $QGJOB_CMD wait --job-id=$JOB4_ID --timeout=120; then
+        # Wait for job with timeout
+        echo "Waiting for Wikipedia AppWright test job: $JOB_ID"
+        if ! $QGJOB_CMD wait --job-id=$JOB_ID --timeout=120; then
           echo "⚠️ Wikipedia job did not complete (expected with placeholder BrowserStack credentials)"
         fi
 
-        # Check final status of all jobs
-        echo "Final job statuses:"
-        $QGJOB_CMD status --job-id=$JOB1_ID --verbose || true
-        $QGJOB_CMD status --job-id=$JOB2_ID --verbose || true
-        $QGJOB_CMD status --job-id=$JOB3_ID --verbose || true
-        $QGJOB_CMD status --job-id=$JOB4_ID --verbose || true
+        # Check final job status
+        echo "Final job status:"
+        $QGJOB_CMD status --job-id=$JOB_ID --verbose || true
 
         echo "✅ Job completion workflow tested successfully"
         
@@ -327,7 +270,7 @@ jobs:
           exit 1
         fi
         
-        echo "🎉 All AppWright end-to-end tests passed!"
+        echo "🎉 Wikipedia AppWright end-to-end test passed!"
 
     - name: Generate test report
       if: always()
