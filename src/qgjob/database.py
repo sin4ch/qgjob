@@ -1,5 +1,5 @@
 import os
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from .models import Base
 import redis
@@ -14,10 +14,11 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 
 # Create database engine with connection validation
 try:
-    engine = create_engine(DATABASE_URL)
+    engine = create_engine(DATABASE_URL, echo=False)
     # Test database connection
     with engine.connect() as conn:
-        conn.execute("SELECT 1")
+        result = conn.execute(text("SELECT 1"))
+        result.fetchone()  # Ensure the query actually executes
     logging.info("Connected to PostgreSQL database successfully")
 except Exception as e:
     logging.error(f"Failed to connect to PostgreSQL database at {DATABASE_URL}: {e}")
