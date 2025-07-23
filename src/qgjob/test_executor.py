@@ -4,9 +4,11 @@ import time
 import logging
 from typing import Dict, Any, Optional
 from selenium import webdriver
-from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
+from selenium.webdriver.chrome.options import Options as ChromeOptions
+from selenium.webdriver.firefox.options import Options as FirefoxOptions
 from selenium.webdriver.remote.webdriver import WebDriver
 from appium import webdriver as appium_webdriver
+from appium.options.common import AppiumOptions
 import requests
 from retrying import retry
 
@@ -75,18 +77,25 @@ class BrowserStackManager:
     @retry(stop_max_attempt_number=3, wait_fixed=5000)
     def create_session(self, target: str, app_version_id: str) -> WebDriver:
         capabilities = self.get_capabilities(target, app_version_id)
-        
+
         if target in ["device", "emulator"]:
+            # Use AppiumOptions for mobile testing
+            options = AppiumOptions()
+            options.load_capabilities(capabilities)
             driver = appium_webdriver.Remote(
                 command_executor=self.get_hub_url(),
-                desired_capabilities=capabilities
+                options=options
             )
         else:
+            # Use ChromeOptions for web testing (default to Chrome)
+            options = ChromeOptions()
+            for key, value in capabilities.items():
+                options.set_capability(key, value)
             driver = webdriver.Remote(
                 command_executor=self.get_hub_url(),
-                desired_capabilities=capabilities
+                options=options
             )
-        
+
         logger.info(f"Created BrowserStack session: {driver.session_id}")
         return driver
     
@@ -266,10 +275,13 @@ class TestExecutor:
             
             capabilities = self.bs_manager.get_capabilities(job_data["target"], job_data["app_version_id"])
             capabilities["app"] = app_url
-            
+
+            # Use AppiumOptions for mobile app testing
+            options = AppiumOptions()
+            options.load_capabilities(capabilities)
             driver = appium_webdriver.Remote(
                 command_executor=self.bs_manager.get_hub_url(),
-                desired_capabilities=capabilities
+                options=options
             )
             session_id = driver.session_id
             
