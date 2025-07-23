@@ -71,6 +71,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install pytest pytest-asyncio pytest-mock
+        pip install -e .  # Install the package in editable mode for CLI access
 
     - name: Install Redis tools
       run: |
@@ -109,6 +110,17 @@ jobs:
         console.log("Test completed successfully");
         process.exit(0);
         EOF
+
+    - name: Verify CLI installation
+      run: |
+        echo "Verifying qgjob CLI installation..."
+        which qgjob || echo "qgjob not in PATH"
+        if qgjob --help > /dev/null 2>&1; then
+          echo "✅ qgjob CLI is working"
+        else
+          echo "⚠️ qgjob CLI not working, will use python -m qgjob.cli as fallback"
+        fi
+        echo "CLI verification complete"
 
     - name: Initialize database
       env:
@@ -168,7 +180,15 @@ jobs:
         BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
       run: |
         echo "Starting end-to-end testing..."
-        
+
+        # Define CLI command with fallback
+        if command -v qgjob > /dev/null 2>&1; then
+          QGJOB_CMD="qgjob"
+        else
+          QGJOB_CMD="python -m qgjob.cli"
+        fi
+        echo "Using CLI command: $QGJOB_CMD"
+
         # Test 1: Health check
         echo "Test 1: API Health Check"
         HEALTH_RESPONSE=$(curl -s http://localhost:8000/health)
@@ -251,31 +271,31 @@ jobs:
 
         # Wait for each job with timeout
         echo "Waiting for onboarding test job: $JOB1_ID"
-        if ! qgjob wait --job-id=$JOB1_ID --timeout=120; then
+        if ! $QGJOB_CMD wait --job-id=$JOB1_ID --timeout=120; then
           echo "⚠️ Onboarding job did not complete (expected with placeholder BrowserStack credentials)"
         fi
 
         echo "Waiting for login test job: $JOB2_ID"
-        if ! qgjob wait --job-id=$JOB2_ID --timeout=120; then
+        if ! $QGJOB_CMD wait --job-id=$JOB2_ID --timeout=120; then
           echo "⚠️ Login job did not complete (expected with placeholder BrowserStack credentials)"
         fi
 
         echo "Waiting for checkout test job: $JOB3_ID"
-        if ! qgjob wait --job-id=$JOB3_ID --timeout=120; then
+        if ! $QGJOB_CMD wait --job-id=$JOB3_ID --timeout=120; then
           echo "⚠️ Checkout job did not complete (expected with placeholder BrowserStack credentials)"
         fi
 
         echo "Waiting for Wikipedia AppWright test job: $JOB4_ID"
-        if ! qgjob wait --job-id=$JOB4_ID --timeout=120; then
+        if ! $QGJOB_CMD wait --job-id=$JOB4_ID --timeout=120; then
           echo "⚠️ Wikipedia job did not complete (expected with placeholder BrowserStack credentials)"
         fi
 
         # Check final status of all jobs
         echo "Final job statuses:"
-        qgjob status --job-id=$JOB1_ID --verbose || true
-        qgjob status --job-id=$JOB2_ID --verbose || true
-        qgjob status --job-id=$JOB3_ID --verbose || true
-        qgjob status --job-id=$JOB4_ID --verbose || true
+        $QGJOB_CMD status --job-id=$JOB1_ID --verbose || true
+        $QGJOB_CMD status --job-id=$JOB2_ID --verbose || true
+        $QGJOB_CMD status --job-id=$JOB3_ID --verbose || true
+        $QGJOB_CMD status --job-id=$JOB4_ID --verbose || true
 
         echo "✅ Job completion workflow tested successfully"
         
@@ -295,7 +315,7 @@ jobs:
 
         # List jobs for the qualgent organization (as per requirements)
         echo "Listing jobs for qualgent organization:"
-        qgjob list --org-id=qualgent
+        $QGJOB_CMD list --org-id=qualgent
 
         # Verify jobs are listed via API
         LIST_RESPONSE=$(curl -s "http://localhost:8000/jobs?org_id=qualgent")
