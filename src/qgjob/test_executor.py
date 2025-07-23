@@ -23,6 +23,12 @@ class BrowserStackManager:
         if not self.username or not self.access_key:
             raise ValueError("BrowserStack credentials not found. Set BROWSERSTACK_USERNAME and BROWSERSTACK_ACCESS_KEY")
     
+    def get_auth_tuple(self):
+        """Return auth tuple, ensuring credentials are not None"""
+        if not self.username or not self.access_key:
+            raise ValueError("BrowserStack credentials are None")
+        return (self.username, self.access_key)
+    
     def get_hub_url(self):
         return f"https://{self.username}:{self.access_key}@hub-cloud.browserstack.com/wd/hub"
     
@@ -79,7 +85,7 @@ class BrowserStackManager:
     
     def get_session_details(self, session_id: str) -> Dict[str, Any]:
         url = f"https://api.browserstack.com/automate/sessions/{session_id}.json"
-        response = requests.get(url, auth=(self.username, self.access_key))
+        response = requests.get(url, auth=self.get_auth_tuple())
         response.raise_for_status()
         return response.json()
     
@@ -89,7 +95,7 @@ class BrowserStackManager:
         response = requests.put(
             url, 
             json=data, 
-            auth=(self.username, self.access_key)
+            auth=self.get_auth_tuple()
         )
         response.raise_for_status()
 
@@ -110,7 +116,7 @@ class AppManager:
             response = requests.post(
                 url,
                 files=files,
-                auth=(self.bs_manager.username, self.bs_manager.access_key)
+                auth=self.bs_manager.get_auth_tuple()
             )
         
         response.raise_for_status()

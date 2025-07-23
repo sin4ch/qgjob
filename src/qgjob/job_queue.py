@@ -9,7 +9,7 @@ class JobQueue:
     STATUS_KEY = "job_status"
     
     def enqueue_job(self, job_data: dict) -> str:
-        job_id = str(uuid.uuid4())
+        job_id = job_data.get("id", str(uuid.uuid4()))
         job_payload = {
             "id": job_id,
             **job_data,

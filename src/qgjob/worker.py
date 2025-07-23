@@ -19,12 +19,16 @@ class JobWorker:
         self.worker_id = worker_id or f"worker-{os.getpid()}"
         self.job_queue = JobQueue()
         self.executor = TestExecutor()
-        self.session = sessionmaker(bind=engine)()
+        self.SessionLocal = sessionmaker(bind=engine)
         self.grouped_jobs = {}
         self.max_retries = int(os.getenv("MAX_JOB_RETRIES", "3"))
         self.processing_lock = FileLock(f"/tmp/worker-{self.worker_id}.lock")
         
         logger.info(f"Worker {self.worker_id} initialized")
+    
+    def get_db_session(self):
+        """Create a new database session"""
+        return self.SessionLocal()
     
     def group_jobs_by_app_version(self):
         jobs_to_process = []
@@ -72,10 +76,11 @@ class JobWorker:
         retry_count = 0
         
         while retry_count <= self.max_retries:
+            session = self.get_db_session()
             try:
                 logger.info(f"Processing job {job_id} (attempt {retry_count + 1})")
                 
-                db_job = self.session.query(Job).filter(Job.id == job_id).first()
+                db_job = session.query(Job).filter(Job.id == job_id).first()
                 if not db_job:
                     logger.error(f"Job {job_id} not found in database")
                     return False
@@ -84,7 +89,7 @@ class JobWorker:
                     logger.info(f"Job {job_id} already completed, skipping")
                     return True
                 
-                self.update_job_status(db_job, JobStatus.PROCESSING)
+                self.update_job_status(db_job, JobStatus.PROCESSING, session)
                 
                 start_time = time.time()
                 result = self.executor.execute_test(job_data)
@@ -101,7 +106,7 @@ class JobWorker:
                         "execution_time": execution_time
                     })
                     
-                    self.session.commit()
+                    session.commit()
                     self.job_queue.update_job_status(job_id, JobStatus.COMPLETED)
                     
                     logger.info(f"Job {job_id} completed successfully in {execution_time:.2f}s")
@@ -125,7 +130,7 @@ class JobWorker:
                             "retry_count": retry_count
                         })
                         
-                        self.session.commit()
+                        session.commit()
                         self.job_queue.update_job_status(job_id, JobStatus.FAILED)
                         
                         logger.error(f"Job {job_id} failed after {retry_count} retries: {error_msg}")
@@ -140,39 +145,45 @@ class JobWorker:
                     time.sleep(min(2 ** retry_count, 30))
                     continue
                 else:
-                    db_job = self.session.query(Job).filter(Job.id == job_id).first()
+                    db_job = session.query(Job).filter(Job.id == job_id).first()
                     if db_job:
                         db_job.status = JobStatus.FAILED
                         db_job.error_message = error_msg
                         db_job.updated_at = datetime.utcnow()
-                        self.session.commit()
+                        session.commit()
                     
                     self.job_queue.update_job_status(job_id, JobStatus.FAILED)
                     return False
+            finally:
+                session.close()
         
         return False
     
-    def update_job_status(self, db_job: Job, status: JobStatus):
+    def update_job_status(self, db_job: Job, status: JobStatus, session):
         db_job.status = status
         db_job.updated_at = datetime.utcnow()
-        self.session.commit()
+        session.commit()
         self.job_queue.update_job_status(db_job.id, status)
     
     def cleanup_stale_jobs(self):
-        cutoff_time = datetime.utcnow() - timedelta(hours=1)
-        stale_jobs = self.session.query(Job).filter(
-            Job.status == JobStatus.PROCESSING,
-            Job.updated_at < cutoff_time
-        ).all()
-        
-        for job in stale_jobs:
-            logger.warning(f"Cleaning up stale job {job.id}")
-            job.status = JobStatus.FAILED
-            job.error_message = "Job timeout - no updates for over 1 hour"
-            job.updated_at = datetime.utcnow()
-        
-        self.session.commit()
-        logger.info(f"Cleaned up {len(stale_jobs)} stale jobs")
+        session = self.get_db_session()
+        try:
+            cutoff_time = datetime.utcnow() - timedelta(hours=1)
+            stale_jobs = session.query(Job).filter(
+                Job.status == JobStatus.PROCESSING,
+                Job.updated_at < cutoff_time
+            ).all()
+            
+            for job in stale_jobs:
+                logger.warning(f"Cleaning up stale job {job.id}")
+                job.status = JobStatus.FAILED
+                job.error_message = "Job timeout - no updates for over 1 hour"
+                job.updated_at = datetime.utcnow()
+            
+            session.commit()
+            logger.info(f"Cleaned up {len(stale_jobs)} stale jobs")
+        finally:
+            session.close()
     
     def run(self):
         logger.info(f"Worker {self.worker_id} started...")
