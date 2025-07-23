@@ -26,8 +26,8 @@ def cli():
 @click.option("--app-version-id", required=True, help="App version ID")
 @click.option("--test", required=True, help="Test file path")
 @click.option("--priority", default=5, help="Job priority (1-10, lower = higher priority)")
-@click.option("--target", default="browserstack", 
-              type=click.Choice(["emulator", "device", "browserstack"]), 
+@click.option("--target", default="browserstack",
+              type=click.Choice(["emulator", "device", "browserstack"]),
               help="Target platform")
 def submit(org_id, app_version_id, test, priority, target):
     """Submit a new test job"""

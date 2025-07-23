@@ -8,10 +8,18 @@ from .job_queue import JobQueue
 import uuid
 import logging
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 
-logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
+# Configure production logging
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO"),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler('qgjob.log')
+    ]
+)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
@@ -32,8 +40,36 @@ job_queue = JobQueue()
 
 @app.on_event("startup")
 async def startup_event():
-    create_tables()
-    logger.info("QualGent Job Orchestrator started")
+    logger.info("Starting QualGent Job Orchestrator in production mode")
+
+    # Validate required environment variables
+    required_env_vars = [
+        "DATABASE_URL",
+        "REDIS_URL",
+        "BROWSERSTACK_USERNAME",
+        "BROWSERSTACK_ACCESS_KEY"
+    ]
+
+    missing_vars = []
+    for var in required_env_vars:
+        if not os.getenv(var) or os.getenv(var) == f"your_{var.lower()}":
+            missing_vars.append(var)
+
+    if missing_vars:
+        error_msg = f"Missing required environment variables: {', '.join(missing_vars)}"
+        logger.error(error_msg)
+        logger.error("Please configure all required environment variables before starting the application")
+        raise RuntimeError(error_msg)
+
+    # Create database tables
+    try:
+        create_tables()
+        logger.info("Database initialization completed successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
+        raise
+
+    logger.info("QualGent Job Orchestrator started successfully")
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -164,7 +200,7 @@ async def cancel_job(job_id: str, db: Session = Depends(get_db)):
         
         job.status = JobStatus.FAILED
         job.error_message = "Job cancelled by user"
-        job.updated_at = datetime.utcnow()
+        job.updated_at = datetime.now(timezone.utc)
         db.commit()
         
         job_queue.update_job_status(job_id, JobStatus.FAILED)
@@ -185,7 +221,7 @@ async def health_check():
         queue_size = job_queue.get_queue_size()
         return {
             "status": "healthy",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "queue_size": queue_size,
             "service": "QualGent Job Orchestrator"
         }
@@ -230,7 +266,7 @@ async def retry_job(job_id: str, db: Session = Depends(get_db)):
         
         job.status = JobStatus.QUEUED
         job.error_message = None
-        job.updated_at = datetime.utcnow()
+        job.updated_at = datetime.now(timezone.utc)
         db.commit()
         
         job_queue.enqueue_job({

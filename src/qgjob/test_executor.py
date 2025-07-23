@@ -22,6 +22,13 @@ class BrowserStackManager:
         
         if not self.username or not self.access_key:
             raise ValueError("BrowserStack credentials not found. Set BROWSERSTACK_USERNAME and BROWSERSTACK_ACCESS_KEY")
+
+        # Check for placeholder values
+        if (self.username == "your_browserstack_username" or
+            self.access_key == "your_browserstack_access_key" or
+            "your_" in self.username.lower() or
+            "your_" in self.access_key.lower()):
+            raise ValueError("BrowserStack credentials contain placeholder values. Please set actual credentials.")
     
     def get_auth_tuple(self):
         """Return auth tuple, ensuring credentials are not None"""
@@ -136,7 +143,16 @@ class AppManager:
 
 class TestExecutor:
     def __init__(self):
-        self.bs_manager = BrowserStackManager()
+        # BrowserStack credentials are required for production
+        try:
+            self.bs_manager = BrowserStackManager()
+            logger.info("BrowserStack integration initialized successfully")
+        except ValueError as e:
+            logger.error(f"BrowserStack credentials are required for production: {e}")
+            logger.error("Please set BROWSERSTACK_USERNAME and BROWSERSTACK_ACCESS_KEY environment variables")
+            logger.error("You can obtain these credentials from your BrowserStack account dashboard")
+            raise RuntimeError(f"BrowserStack credentials required: {e}")
+
         self.app_manager = AppManager(self.bs_manager)
         self.test_scripts_dir = os.getenv("TEST_SCRIPTS_DIR", "tests")
     
@@ -154,7 +170,14 @@ class TestExecutor:
             elif target in ["device", "emulator"]:
                 return self._execute_browserstack_app_test(job_data)
             else:
-                return self._execute_local_test(job_data)
+                error_msg = f"Unsupported target '{target}' in production. Only 'browserstack', 'device', and 'emulator' are supported."
+                logger.error(error_msg)
+                return {
+                    "success": False,
+                    "error": error_msg,
+                    "video_url": None,
+                    "test_results": f"Unsupported target: {target}"
+                }
         
         except Exception as e:
             logger.error(f"Test execution failed for job {job_id}: {str(e)}")
@@ -166,6 +189,18 @@ class TestExecutor:
             }
     
     def _execute_browserstack_web_test(self, job_data: Dict[str, Any]) -> Dict[str, Any]:
+        # This should never happen since we fail fast in __init__, but keeping for safety
+        if not self.bs_manager:
+            error_msg = "BrowserStack credentials are required but not configured"
+            logger.error(error_msg)
+            logger.error("Please set BROWSERSTACK_USERNAME and BROWSERSTACK_ACCESS_KEY environment variables")
+            return {
+                "success": False,
+                "error": error_msg,
+                "video_url": None,
+                "test_results": "BrowserStack credentials not available"
+            }
+        
         driver = None
         session_id = None
         
@@ -198,6 +233,18 @@ class TestExecutor:
                 driver.quit()
     
     def _execute_browserstack_app_test(self, job_data: Dict[str, Any]) -> Dict[str, Any]:
+        # This should never happen since we fail fast in __init__, but keeping for safety
+        if not self.bs_manager or not self.app_manager:
+            error_msg = "BrowserStack credentials are required but not configured"
+            logger.error(error_msg)
+            logger.error("Please set BROWSERSTACK_USERNAME and BROWSERSTACK_ACCESS_KEY environment variables")
+            return {
+                "success": False,
+                "error": error_msg,
+                "video_url": None,
+                "test_results": "BrowserStack credentials not available"
+            }
+        
         driver = None
         session_id = None
         
@@ -207,8 +254,15 @@ class TestExecutor:
             if os.path.exists(app_path):
                 app_url = self.app_manager.upload_app(job_data["app_version_id"], app_path)
             else:
-                logger.warning(f"App file not found for {job_data['app_version_id']}, using mock")
-                return self._execute_mock_app_test(job_data)
+                error_msg = f"App file not found for {job_data['app_version_id']} at path: {app_path}"
+                logger.error(error_msg)
+                logger.error("Please ensure the app file exists in the APP_STORAGE_DIR")
+                return {
+                    "success": False,
+                    "error": error_msg,
+                    "video_url": None,
+                    "test_results": f"App file not found: {app_path}"
+                }
             
             capabilities = self.bs_manager.get_capabilities(job_data["target"], job_data["app_version_id"])
             capabilities["app"] = app_url
@@ -243,46 +297,9 @@ class TestExecutor:
             if driver:
                 driver.quit()
     
-    def _execute_local_test(self, job_data: Dict[str, Any]) -> Dict[str, Any]:
-        logger.info(f"Running local test for job {job_data['id']}")
-        
-        test_script_path = os.path.join(self.test_scripts_dir, job_data["test_path"])
-        
-        if not os.path.exists(test_script_path):
-            return {
-                "success": False,
-                "error": f"Test script not found: {test_script_path}",
-                "video_url": None,
-                "test_results": f"Test script {job_data['test_path']} not found"
-            }
-        
-        try:
-            result = self._execute_test_script_locally(test_script_path, job_data)
-            return {
-                "success": result["success"],
-                "video_url": result.get("video_url"),
-                "test_results": result["output"],
-                "execution_time": result.get("execution_time", 0)
-            }
-        except Exception as e:
-            return {
-                "success": False,
-                "error": str(e),
-                "video_url": None,
-                "test_results": f"Local test execution failed: {str(e)}"
-            }
+
     
-    def _execute_mock_app_test(self, job_data: Dict[str, Any]) -> Dict[str, Any]:
-        logger.info(f"Running mock app test for job {job_data['id']}")
-        time.sleep(3)
-        
-        return {
-            "success": True,
-            "video_url": f"https://mock-browserstack-video.com/{job_data['id']}.mp4",
-            "test_results": f"Mock app test passed for {job_data['test_path']}",
-            "session_id": f"mock-session-{job_data['id']}",
-            "execution_time": 3
-        }
+
     
     def _run_web_test_script(self, driver: WebDriver, test_path: str) -> Dict[str, Any]:
         start_time = time.time()
@@ -520,76 +537,4 @@ class TestExecutor:
             "execution_time": time.time() - start_time
         }
     
-    def _execute_test_script_locally(self, script_path: str, job_data: Dict[str, Any]) -> Dict[str, Any]:
-        start_time = time.time()
-        
-        if script_path.endswith('.js'):
-            return self._execute_nodejs_test(script_path, job_data)
-        elif script_path.endswith('.py'):
-            return self._execute_python_test(script_path, job_data)
-        else:
-            raise Exception(f"Unsupported test script format: {script_path}")
-    
-    def _execute_nodejs_test(self, script_path: str, job_data: Dict[str, Any]) -> Dict[str, Any]:
-        import subprocess
-        
-        start_time = time.time()
-        
-        try:
-            result = subprocess.run(
-                ['node', script_path],
-                capture_output=True,
-                text=True,
-                timeout=300,
-                cwd=os.path.dirname(script_path)
-            )
-            
-            return {
-                "success": result.returncode == 0,
-                "output": result.stdout + result.stderr,
-                "execution_time": time.time() - start_time
-            }
-        except subprocess.TimeoutExpired:
-            return {
-                "success": False,
-                "output": "Test execution timed out after 5 minutes",
-                "execution_time": time.time() - start_time
-            }
-        except Exception as e:
-            return {
-                "success": False,
-                "output": f"Failed to execute Node.js test: {str(e)}",
-                "execution_time": time.time() - start_time
-            }
-    
-    def _execute_python_test(self, script_path: str, job_data: Dict[str, Any]) -> Dict[str, Any]:
-        import subprocess
-        
-        start_time = time.time()
-        
-        try:
-            result = subprocess.run(
-                ['python', script_path],
-                capture_output=True,
-                text=True,
-                timeout=300,
-                cwd=os.path.dirname(script_path)
-            )
-            
-            return {
-                "success": result.returncode == 0,
-                "output": result.stdout + result.stderr,
-                "execution_time": time.time() - start_time
-            }
-        except subprocess.TimeoutExpired:
-            return {
-                "success": False,
-                "output": "Test execution timed out after 5 minutes",
-                "execution_time": time.time() - start_time
-            }
-        except Exception as e:
-            return {
-                "success": False,
-                "output": f"Failed to execute Python test: {str(e)}",
-                "execution_time": time.time() - start_time
-            }
+

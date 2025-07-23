@@ -2,8 +2,9 @@ import time
 import json
 import logging
 import os
+import sys
 from typing import Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import sessionmaker
 from .database import engine, redis_client
 from .models import Job, JobStatus
@@ -11,17 +12,56 @@ from .job_queue import JobQueue
 from .test_executor import TestExecutor
 from filelock import FileLock
 
-logging.basicConfig(level=logging.INFO)
+# Configure production logging for worker
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO"),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler('qgjob-worker.log')
+    ]
+)
+
 logger = logging.getLogger(__name__)
 
 class JobWorker:
     def __init__(self, worker_id: Optional[str] = None):
         self.worker_id = worker_id or f"worker-{os.getpid()}"
-        self.job_queue = JobQueue()
-        self.executor = TestExecutor()
-        self.SessionLocal = sessionmaker(bind=engine)
-        self.grouped_jobs = {}
-        self.max_retries = int(os.getenv("MAX_JOB_RETRIES", "3"))
+        logger.info(f"Initializing QualGent Job Worker {self.worker_id} in production mode")
+
+        # Validate production dependencies
+        self._validate_production_dependencies()
+
+        try:
+            self.job_queue = JobQueue()
+            self.executor = TestExecutor()
+            self.SessionLocal = sessionmaker(bind=engine)
+            self.grouped_jobs = {}
+            self.max_retries = int(os.getenv("MAX_JOB_RETRIES", "3"))
+            logger.info(f"Job Worker {self.worker_id} initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize Job Worker {self.worker_id}: {e}")
+            raise RuntimeError(f"Worker initialization failed: {e}")
+
+    def _validate_production_dependencies(self):
+        """Validate that all production dependencies are available"""
+        required_env_vars = [
+            "DATABASE_URL",
+            "REDIS_URL",
+            "BROWSERSTACK_USERNAME",
+            "BROWSERSTACK_ACCESS_KEY"
+        ]
+
+        missing_vars = []
+        for var in required_env_vars:
+            if not os.getenv(var) or os.getenv(var) == f"your_{var.lower()}":
+                missing_vars.append(var)
+
+        if missing_vars:
+            error_msg = f"Missing required environment variables: {', '.join(missing_vars)}"
+            logger.error(error_msg)
+            logger.error("Worker requires all production dependencies to be configured")
+            raise RuntimeError(error_msg)
         self.processing_lock = FileLock(f"/tmp/worker-{self.worker_id}.lock")
         
         logger.info(f"Worker {self.worker_id} initialized")
@@ -149,7 +189,7 @@ class JobWorker:
                     if db_job:
                         db_job.status = JobStatus.FAILED
                         db_job.error_message = error_msg
-                        db_job.updated_at = datetime.utcnow()
+                        db_job.updated_at = datetime.now(timezone.utc)
                         session.commit()
                     
                     self.job_queue.update_job_status(job_id, JobStatus.FAILED)
@@ -161,14 +201,14 @@ class JobWorker:
     
     def update_job_status(self, db_job: Job, status: JobStatus, session):
         db_job.status = status
-        db_job.updated_at = datetime.utcnow()
+        db_job.updated_at = datetime.now(timezone.utc)
         session.commit()
         self.job_queue.update_job_status(db_job.id, status)
     
     def cleanup_stale_jobs(self):
         session = self.get_db_session()
         try:
-            cutoff_time = datetime.utcnow() - timedelta(hours=1)
+            cutoff_time = datetime.now(timezone.utc) - timedelta(hours=1)
             stale_jobs = session.query(Job).filter(
                 Job.status == JobStatus.PROCESSING,
                 Job.updated_at < cutoff_time
@@ -178,7 +218,7 @@ class JobWorker:
                 logger.warning(f"Cleaning up stale job {job.id}")
                 job.status = JobStatus.FAILED
                 job.error_message = "Job timeout - no updates for over 1 hour"
-                job.updated_at = datetime.utcnow()
+                job.updated_at = datetime.now(timezone.utc)
             
             session.commit()
             logger.info(f"Cleaned up {len(stale_jobs)} stale jobs")

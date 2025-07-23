@@ -1,6 +1,6 @@
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from .database import redis_client
 from .models import Job, JobStatus
 
@@ -13,7 +13,7 @@ class JobQueue:
         job_payload = {
             "id": job_id,
             **job_data,
-            "created_at": datetime.utcnow().isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat()
         }
         
         redis_client.lpush(self.QUEUE_KEY, json.dumps(job_payload))

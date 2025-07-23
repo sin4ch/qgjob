@@ -1,483 +1,361 @@
-# QualGent Job Orchestrator - Production Ready
+# QualGent Job Orchestrator
 
-A production-grade job orchestration system for running AppWright tests across multiple devices and platforms with real BrowserStack integration.
+A production-ready job orchestration system for managing and executing automated tests on BrowserStack. This system provides a complete solution for queuing, processing, and monitoring test jobs with support for web and mobile app testing.
 
 ## Features
 
-✅ **Real BrowserStack Integration** - Execute tests on real devices and browsers  
-✅ **Intelligent Job Grouping** - Group jobs by `app_version_id` to minimize setup overhead  
-✅ **Retry & Failure Handling** - Automatic retries with exponential backoff  
-✅ **Horizontal Scaling** - Multiple worker processes with distributed job processing  
-✅ **Monitoring & Metrics** - Built-in health checks and system metrics  
-✅ **Video Recording** - Automatic test execution video capture  
-✅ **CLI Tool** - Professional command-line interface with progress bars  
-✅ **Docker Ready** - Complete containerized deployment  
-✅ **GitHub Actions** - Full CI/CD integration  
+- **Job Queue Management**: Redis-based job queuing with priority support
+- **BrowserStack Integration**: Seamless integration with BrowserStack for web and mobile testing
+- **REST API**: Complete API for job submission, monitoring, and management
+- **CLI Tool**: Command-line interface for easy job management
+- **Worker Process**: Background workers for job execution
+- **Database Persistence**: PostgreSQL support for job tracking
+- **Production Logging**: Comprehensive logging and monitoring
+- **Error Handling**: Robust error handling with retry logic
 
 ## Architecture
 
 ```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   qgjob CLI     │───▶│  FastAPI Backend │───▶│  PostgreSQL     │
-│   (Click)       │    │  (Job API)       │    │  (Job Storage)  │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-                               │
-                               ▼
-                       ┌──────────────────┐    ┌─────────────────┐
-                       │  Redis Queue     │───▶│  Worker Cluster │
-                       │  (Job Queue)     │    │  (Job Executors)│
-                       └──────────────────┘    └─────────────────┘
-                                                       │
-                                                       ▼
-                                               ┌─────────────────┐
-                                               │  BrowserStack   │
-                                               │  (Real Devices) │
-                                               └─────────────────┘
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   CLI Client    │    │   REST API      │    │   Web Client    │
+└─────────┬───────┘    └─────────┬───────┘    └─────────┬───────┘
+          │                      │                      │
+          └──────────────────────┼──────────────────────┘
+                                 │
+                    ┌─────────────┴─────────────┐
+                    │     FastAPI Server        │
+                    │   (Job Orchestrator)      │
+                    └─────────────┬─────────────┘
+                                  │
+                    ┌─────────────┴─────────────┐
+                    │      Redis Queue          │
+                    └─────────────┬─────────────┘
+                                  │
+                    ┌─────────────┴─────────────┐
+                    │    Worker Processes       │
+                    │  (Test Executors)         │
+                    └─────────────┬─────────────┘
+                                  │
+                    ┌─────────────┴─────────────┐
+                    │    BrowserStack API       │
+                    │   (Test Execution)        │
+                    └───────────────────────────┘
 ```
 
-## Quick Start
+## Prerequisites
 
-### Prerequisites
-- Docker & Docker Compose
-- BrowserStack account (optional, will fallback to mock tests)
+**Required Infrastructure:**
+- Python 3.8+
+- PostgreSQL 12+ (running and accessible)
+- Redis 6+ (running and accessible)
+- BrowserStack Account with valid credentials
 
-### 1. Clone and Configure
+**Important:** This is a production application that requires all dependencies to be properly configured. The application will fail to start if any required component is missing.
+
+## Installation
+
+### 1. Clone and Setup
+
 ```bash
-git clone <your-repo-url>
+git clone <repository-url>
 cd qgjob
-cp .env.example .env
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
 ```
 
-### 2. Add BrowserStack Credentials (Optional)
+### 2. Database Setup (PostgreSQL)
+
+**Install PostgreSQL:**
 ```bash
-# Edit .env file
-BROWSERSTACK_USERNAME=your_username
-BROWSERSTACK_ACCESS_KEY=your_access_key
+# Ubuntu/Debian
+sudo apt-get install postgresql postgresql-contrib
+
+# macOS
+brew install postgresql
+
+# Windows - Download from https://www.postgresql.org/download/windows/
 ```
 
-### 3. Start Services
-```bash
-docker-compose up -d
+**Create Database:**
+```sql
+CREATE DATABASE qgjob;
+CREATE USER qgjob_user WITH PASSWORD 'secure_password';
+GRANT ALL PRIVILEGES ON DATABASE qgjob TO qgjob_user;
 ```
 
-### 4. Install CLI
+### 3. Redis Setup
+
+**Install Redis:**
 ```bash
-pip install -e .
+# Ubuntu/Debian
+sudo apt-get install redis-server
+
+# macOS
+brew install redis
+
+# Docker (alternative)
+docker run -d -p 6379:6379 --name redis redis:alpine
 ```
 
-### 5. Submit Test Jobs
+**Start Redis:**
 ```bash
-# Submit jobs for the same app version (will be grouped)
-qgjob submit --org-id=qualgent --app-version-id=v1.2.3 --test=tests/onboarding.spec.js --priority=1
-qgjob submit --org-id=qualgent --app-version-id=v1.2.3 --test=tests/login.spec.js --priority=2
-qgjob submit --org-id=qualgent --app-version-id=v1.2.3 --test=tests/checkout.spec.js --priority=3
-
-# Check status
-qgjob list --org-id=qualgent
-qgjob status --job-id=<job-id> --verbose
+redis-server
 ```
 
-## Production Setup
+### 4. BrowserStack Setup
 
-### Environment Variables
-```bash
-# Database
-DATABASE_URL=postgresql://user:password@host:5432/qgjob
-REDIS_URL=redis://host:6379
+1. Create account at https://www.browserstack.com/
+2. Get credentials from Account → Settings → Automate
+3. Note your username and access key
 
-# BrowserStack
-BROWSERSTACK_USERNAME=your_username
-BROWSERSTACK_ACCESS_KEY=your_access_key
+### 5. Environment Configuration
 
-# Configuration
-BUILD_NAME=MyApp-Production-Build
-PROJECT_NAME=MyApp
+**Create `.env` file:**
+```env
+# Database (Required)
+DATABASE_URL=postgresql://qgjob_user:secure_password@localhost:5432/qgjob
+
+# Redis (Required)
+REDIS_URL=redis://localhost:6379
+
+# API Configuration
+QGJOB_API_URL=http://localhost:8000
+
+# BrowserStack Credentials (Required)
+BROWSERSTACK_USERNAME=your_actual_username
+BROWSERSTACK_ACCESS_KEY=your_actual_access_key
+
+# Application Settings
+BUILD_NAME=QualGent-Test-Build
+PROJECT_NAME=QualGent
+APP_STORAGE_DIR=/tmp/apps
+TEST_SCRIPTS_DIR=tests
 MAX_JOB_RETRIES=3
+WORKER_TIMEOUT_HOURS=1
 LOG_LEVEL=INFO
 ```
 
-### Scaling Workers
+**⚠️ Important:** Replace placeholder values with actual credentials. The application will not start with default placeholder values.
+
+### 6. Initialize Database
+
 ```bash
-# Scale worker processes
-docker-compose up --scale worker=5 -d
+python -c "from src.qgjob.database import create_tables; create_tables()"
 ```
 
-### Health Monitoring
+## Running the Application
+
+### Start API Server
 ```bash
-# API Health Check
+python -m src.qgjob.main
+```
+
+### Start Worker Process
+```bash
+python -m src.qgjob.worker
+```
+
+**Note:** Both processes must be running for the system to function properly.
+
+## Usage
+
+### CLI Commands
+
+**Submit a Job:**
+```bash
+qgjob submit --org-id "my-org" --app-version-id "v1.0.0" --test "login.spec.js" --priority 1 --target browserstack
+```
+
+**Check Job Status:**
+```bash
+qgjob status --job-id "job-uuid"
+```
+
+**List Jobs:**
+```bash
+qgjob list --org-id "my-org"
+qgjob list --status failed
+```
+
+**System Metrics:**
+```bash
+qgjob metrics
+```
+
+### REST API
+
+**Submit Job:**
+```bash
+curl -X POST http://localhost:8000/jobs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "org_id": "my-org",
+    "app_version_id": "v1.0.0", 
+    "test_path": "login.spec.js",
+    "priority": 1,
+    "target": "browserstack"
+  }'
+```
+
+**Health Check:**
+```bash
 curl http://localhost:8000/health
-
-# System Metrics  
-curl http://localhost:8000/metrics
-qgjob metrics
 ```
 
-## CLI Usage
+## Supported Targets
 
-### Submit Jobs
-```bash
-# Basic submission
-qgjob submit --org-id=myorg --app-version-id=v1.0.0 --test=tests/login.spec.js
+- **browserstack**: Web testing on BrowserStack
+- **device**: Mobile app testing on real devices via BrowserStack
+- **emulator**: Mobile app testing on emulators via BrowserStack
 
-# With priority and target
-qgjob submit --org-id=myorg --app-version-id=v1.0.0 --test=tests/checkout.spec.js --priority=1 --target=device
-```
+All targets require valid BrowserStack credentials.
 
-### Monitor Jobs
-```bash
-# List all jobs
-qgjob list
+## Production Deployment
 
-# Filter by organization  
-qgjob list --org-id=myorg
+### Environment Requirements
 
-# Filter by status
-qgjob list --status=failed
+1. **PostgreSQL Database**
+   - Dedicated database instance
+   - Proper backup strategy
+   - Connection pooling for high load
 
-# Get detailed status
-qgjob status --job-id=abc123 --verbose
-```
+2. **Redis Instance**
+   - Persistent Redis configuration
+   - Memory allocation based on queue size
+   - High availability setup for critical systems
 
-### Job Management
-```bash
-# Wait for completion with progress bar
-qgjob wait --job-id=abc123
-
-# Retry failed job
-qgjob retry --job-id=abc123
-
-# Cancel running job
-qgjob cancel --job-id=abc123
-
-# System metrics
-qgjob metrics
-```
-
-## Job Processing Flow
-
-### 1. Job Submission
-```bash
-qgjob submit --org-id=acme --app-version-id=v2.1.0 --test=tests/signup.spec.js
-```
-
-### 2. Intelligent Grouping
-- Workers collect jobs from Redis queue
-- Jobs are automatically grouped by `app_version_id`
-- Priority ordering maintained within each group
-
-### 3. Efficient Execution
-```
-Group: app_version_id = v2.1.0
-├── Install app v2.1.0 once
-├── Run tests/signup.spec.js (priority 1)
-├── Run tests/login.spec.js (priority 2)  
-├── Run tests/checkout.spec.js (priority 3)
-└── Cleanup and record results
-```
-
-### 4. Real Test Execution
-- **BrowserStack**: Real devices/browsers with video recording
-- **Local**: Selenium-based execution for development
-- **Mock**: Fast simulation for testing/development
-
-### 5. Results & Artifacts
-- Video recordings of test execution
-- Detailed test logs and results
-- BrowserStack session links
-- Performance metrics
-
-## BrowserStack Integration
-
-### Supported Targets
-- `device` - Real mobile devices (Samsung Galaxy S22, iPhone 13, etc.)
-- `emulator` - Cloud emulators (Android, iOS simulators)  
-- `browserstack` - Desktop browsers (Chrome, Firefox, Safari, Edge)
-
-### Automatic Features
-- Video recording of all test sessions
-- Network logs and console capture
-- Automatic session status updates
-- Device/browser capability management
-
-### Example Test Results
-```json
-{
-  "success": true,
-  "video_url": "https://app-automate.browserstack.com/video/abc123.mp4",
-  "browserstack_url": "https://app-automate.browserstack.com/dashboard/abc123", 
-  "session_id": "browserstack-session-id",
-  "test_results": "Login test completed successfully",
-  "execution_time": 45.2
-}
-```
-
-## GitHub Actions Integration
-
-### Complete Workflow
-```yaml
-name: QualGent Tests
-on: [push, pull_request]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      
-      - name: Setup QualGent
-        run: |
-          pip install -e .
-          docker-compose up -d
-          sleep 30
-        
-      - name: Submit Test Suite  
-        run: |
-          qgjob submit --org-id=ci --app-version-id=${{ github.sha }} --test=tests/smoke.spec.js --priority=1
-          qgjob submit --org-id=ci --app-version-id=${{ github.sha }} --test=tests/integration.spec.js --priority=2
-          qgjob submit --org-id=ci --app-version-id=${{ github.sha }} --test=tests/e2e.spec.js --priority=3
-        
-      - name: Wait for Results
-        run: |
-          for job_id in $(qgjob list --org-id=ci --status=queued --format=json | jq -r '.[].job_id'); do
-            qgjob wait --job-id=$job_id --timeout=600
-          done
-          
-      - name: Collect Results
-        run: |
-          qgjob list --org-id=ci
-          qgjob metrics
-```
-
-## API Endpoints
-
-### Job Management
-- `POST /jobs` - Submit new job
-- `GET /jobs/{id}` - Get job details
-- `GET /jobs` - List jobs with filters
-- `DELETE /jobs/{id}` - Cancel job
-- `GET /jobs/{id}/retry` - Retry failed job
-
-### Monitoring  
-- `GET /health` - Service health check
-- `GET /metrics` - System metrics and statistics
-
-### Filters & Pagination
-```bash
-GET /jobs?org_id=acme&status=completed&limit=50&offset=0
-```
-
-## Error Handling & Reliability
-
-### Automatic Retries
-- Failed jobs automatically retry up to 3 times
-- Exponential backoff between attempts
-- Different retry strategies for different error types
-
-### Failure Recovery
-- Worker crash recovery
-- Database connection resilience  
-- Redis failover support
-- Stale job cleanup
-
-### Monitoring & Alerting
-- Health check endpoints
-- Metrics collection
-- Structured logging
-- Error tracking
-
-## Performance & Scalability
-
-### Optimizations
-- **Job Grouping**: 50% reduction in execution time
-- **Connection Pooling**: Database and Redis optimization
-- **Parallel Processing**: Multiple worker processes
-- **Caching**: Efficient app and capability caching
-
-### Scaling Strategies
-```bash
-# Horizontal scaling
-docker-compose up --scale worker=10
-
-# Distributed deployment
-kubectl apply -f k8s/deployment.yaml
-```
-
-### Metrics
-- Jobs per minute throughput
-- Average execution time per test type
-- Success/failure rates by organization
-- Queue depth and processing latency
-
-## Development
-
-### Local Development
-```bash
-# Install dependencies
-pip install -r requirements.txt
-pip install -e .
-
-# Start services
-docker-compose up postgres redis -d
-
-# Run API server
-python -m qgjob.main
-
-# Run worker (separate terminal)
-python -m qgjob.worker
-```
-
-### Testing
-```bash
-# Run integration tests
-python -m pytest tests/
-
-# Submit test job
-qgjob submit --org-id=test --app-version-id=dev --test=tests/sample.spec.js
-```
-
-This production-ready implementation provides enterprise-grade reliability, scalability, and monitoring for automated test orchestration.
-
-## Components
-
-### 1. CLI Tool (`qgjob`)
-- Submit test jobs
-- Check job status
-- List jobs by organization
-- Wait for job completion
-
-### 2. Backend API
-- REST API built with FastAPI
-- PostgreSQL for persistent job storage
-- Redis for job queuing
-
-### 3. Worker Process
-- Groups jobs by `app_version_id` for efficiency
-- Executes tests on BrowserStack or mock environment
-- Updates job status throughout execution
-
-### 4. GitHub Actions Integration
-- Automated test submission during CI/CD
-- Waits for completion and reports results
-
-## How Grouping/Scheduling Works
-
-1. Jobs are submitted to the API and stored in PostgreSQL
-2. Jobs are queued in Redis for processing
-3. Worker process dequeues jobs and groups them by `app_version_id`
-4. Jobs within the same group are processed together (simulating app installation once per group)
-5. Jobs are sorted by priority within each group
-6. Test execution results are stored and made available via API
-
-## Setup Instructions
-
-### Local Development
-
-1. Install dependencies:
-```bash
-pip install -r requirements.txt
-pip install -e .
-```
-
-2. Start PostgreSQL and Redis:
-```bash
-docker-compose up postgres redis -d
-```
-
-3. Start the API server:
-```bash
-export DATABASE_URL=postgresql://postgres:password@localhost:5432/qgjob
-export REDIS_URL=redis://localhost:6379
-python -m qgjob.main
-```
-
-4. Start the worker process:
-```bash
-export DATABASE_URL=postgresql://postgres:password@localhost:5432/qgjob
-export REDIS_URL=redis://localhost:6379
-python -m qgjob.worker
-```
-
-5. CLI tool is automatically available after installation:
-```bash
-qgjob --help
-```
+3. **BrowserStack Account**
+   - Sufficient parallel testing limits
+   - Valid subscription with required features
 
 ### Docker Deployment
 
-```bash
-docker-compose up
+```yaml
+version: '3.8'
+services:
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_DB: qgjob
+      POSTGRES_USER: qgjob_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://qgjob_user:${DB_PASSWORD}@postgres:5432/qgjob
+      - REDIS_URL=redis://redis:6379
+      - BROWSERSTACK_USERNAME=${BS_USERNAME}
+      - BROWSERSTACK_ACCESS_KEY=${BS_ACCESS_KEY}
+    depends_on:
+      - postgres
+      - redis
+
+  worker:
+    build: .
+    command: python -m src.qgjob.worker
+    environment:
+      - DATABASE_URL=postgresql://qgjob_user:${DB_PASSWORD}@postgres:5432/qgjob
+      - REDIS_URL=redis://redis:6379
+      - BROWSERSTACK_USERNAME=${BS_USERNAME}
+      - BROWSERSTACK_ACCESS_KEY=${BS_ACCESS_KEY}
+    depends_on:
+      - postgres
+      - redis
+
+volumes:
+  postgres_data:
+  redis_data:
 ```
 
-This starts all services including PostgreSQL, Redis, API server, and worker process.
+## Troubleshooting
 
-## CLI Usage
+### Application Won't Start
 
-### Submit a job:
-```bash
-qgjob submit --org-id=qualgent --app-version-id=xyz123 --test=tests/onboarding.spec.js
+**Database Connection Failed:**
+```
+RuntimeError: Database connection failed: connection to server at "localhost" (127.0.0.1), port 5432 failed
+```
+- Verify PostgreSQL is running: `pg_isready`
+- Check DATABASE_URL format: `postgresql://user:password@host:port/database`
+- Ensure database exists and user has permissions
+
+**Redis Connection Failed:**
+```
+RuntimeError: Redis connection failed: Error 111 connecting to localhost:6379. Connection refused.
+```
+- Verify Redis is running: `redis-cli ping`
+- Check REDIS_URL format: `redis://localhost:6379`
+
+**BrowserStack Credentials Required:**
+```
+RuntimeError: BrowserStack credentials required: BrowserStack credentials not found
+```
+- Set BROWSERSTACK_USERNAME and BROWSERSTACK_ACCESS_KEY
+- Verify credentials are not placeholder values
+- Test credentials on BrowserStack dashboard
+
+### Worker Issues
+
+**Worker Not Processing Jobs:**
+- Check worker logs in `qgjob-worker.log`
+- Verify all environment variables are set
+- Ensure BrowserStack account has available parallel sessions
+
+**Jobs Failing:**
+- Check BrowserStack account limits
+- Verify app files exist in APP_STORAGE_DIR
+- Review job error messages in database
+
+### Monitoring
+
+**Log Files:**
+- API: `qgjob.log`
+- Worker: `qgjob-worker.log`
+
+**Health Checks:**
+- API: `GET /health`
+- Metrics: `GET /metrics`
+
+## API Reference
+
+### Job Object
+```json
+{
+  "id": "uuid",
+  "org_id": "string",
+  "app_version_id": "string", 
+  "test_path": "string",
+  "priority": 1,
+  "target": "browserstack|device|emulator",
+  "status": "queued|processing|completed|failed",
+  "created_at": "2023-01-01T00:00:00Z",
+  "updated_at": "2023-01-01T00:00:00Z",
+  "result": "string",
+  "error_message": "string"
+}
 ```
 
-### Check job status:
-```bash
-qgjob status --job-id=<job-id>
-```
-
-### List jobs:
-```bash
-qgjob list --org-id=qualgent
-```
-
-### Wait for completion:
-```bash
-qgjob wait --job-id=<job-id>
-```
-
-## End-to-End Test Example
-
-1. Start all services:
-```bash
-docker-compose up -d
-```
-
-3. Submit multiple jobs for the same app version:
-```bash
-qgjob submit --org-id=qualgent --app-version-id=xyz123 --test=tests/onboarding.spec.js --priority=1
-qgjob submit --org-id=qualgent --app-version-id=xyz123 --test=tests/login.spec.js --priority=2
-qgjob submit --org-id=qualgent --app-version-id=abc456 --test=tests/checkout.spec.js --priority=1
-```
-
-4. Monitor job processing:
-```bash
-qgjob list --org-id=qualgent
-```
-
-5. Check individual job results:
-```bash
-qgjob status --job-id=<job-id>
-```
-
-## Environment Variables
-
-- `DATABASE_URL`: PostgreSQL connection string
-- `REDIS_URL`: Redis connection string
-- `QGJOB_API_URL`: API endpoint for CLI (default: http://localhost:8000)
-- `BROWSERSTACK_USER`: BrowserStack username (optional)
-- `BROWSERSTACK_KEY`: BrowserStack access key (optional)
-
-## API Endpoints
-
-- `POST /jobs` - Submit a new job
-- `GET /jobs/{job_id}` - Get job status
-- `GET /jobs` - List jobs (optionally filtered by org_id)
+### Endpoints
+- `POST /jobs` - Submit new job
+- `GET /jobs/{job_id}` - Get job details
+- `GET /jobs` - List jobs with filters
+- `DELETE /jobs/{job_id}` - Cancel job
+- `POST /jobs/{job_id}/retry` - Retry failed job
 - `GET /health` - Health check
+- `GET /metrics` - System metrics
 
-## GitHub Actions Integration
+## License
 
-The workflow in `.github/workflows/test.yml` demonstrates:
-1. Setting up services (PostgreSQL, Redis)
-2. Starting API and worker processes
-3. Submitting test jobs
-4. Waiting for completion
-5. Reporting results
-
-Jobs are automatically grouped by `app_version_id` and processed efficiently by the worker.
+This project is licensed under the MIT License.

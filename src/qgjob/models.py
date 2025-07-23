@@ -1,5 +1,5 @@
 from sqlalchemy import Column, String, Integer, DateTime, Text, Enum as SQLEnum
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 from sqlalchemy.sql import func
 from enum import Enum
 
@@ -23,7 +23,7 @@ class Job(Base):
     org_id = Column(String, nullable=False, index=True)
     app_version_id = Column(String, nullable=False, index=True)
     test_path = Column(Text, nullable=False)
-    priority = Column(Integer, default=5)
+    priority = Column(Integer, default=5, server_default="5")
     target = Column(SQLEnum(JobTarget), nullable=False)
     status = Column(SQLEnum(JobStatus), default=JobStatus.QUEUED)
     created_at = Column(DateTime, default=func.now())
