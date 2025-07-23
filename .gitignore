@@ -46,6 +46,9 @@ Thumbs.db
 # Documentation files (automatically moved to docs/ folder)
 docs/
 
-# Temporary files
+# Log files and directories
+logs/
 qgjob.db
 *.log
+tests/demo_test.js
+qgjob_demo.db
