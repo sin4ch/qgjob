@@ -1,63 +1,67 @@
 # QualGent Job Orchestrator
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![CI/CD](https://github.com/qualgent/qgjob/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/qualgent/qgjob/actions/workflows/ci-cd.yml)
 
-A production-ready job orchestration system for managing and executing AppWright automated tests on BrowserStack. This system provides a complete solution for queuing, processing, and monitoring AppWright test jobs with support for web and mobile app testing.
+A production-ready job orchestration system for managing and executing AppWright automated tests on BrowserStack. Provides complete job queuing, processing, and monitoring for web and mobile app testing.
 
 ## Features
 
-- **Job Queue Management**: Redis-based job queuing with priority support
-- **BrowserStack Integration**: Seamless integration with BrowserStack for web and mobile testing
-- **REST API**: Complete API for job submission, monitoring, and management
-- **CLI Tool**: Command-line interface for easy job management
-- **Worker Process**: Background workers for job execution
-- **Database Persistence**: PostgreSQL support for job tracking
-- **Production Logging**: Comprehensive logging and monitoring
-- **Error Handling**: Robust error handling with retry logic
+- **Job Queue Management**: Redis-based queuing with priority support
+- **BrowserStack Integration**: Web and mobile testing on real devices
+- **REST API & CLI**: Complete interfaces for job management
+- **Worker Processes**: Background test execution with retry logic
+- **Database Persistence**: PostgreSQL job tracking and results
+- **Production Ready**: Comprehensive logging, monitoring, and CI/CD integration
 
 ## Architecture
 
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   CLI Client    │    │   REST API      │    │   Web Client    │
-└─────────┬───────┘    └─────────┬───────┘    └─────────┬───────┘
-          │                      │                      │
-          └──────────────────────┼──────────────────────┘
-                                 │
-                    ┌─────────────┴─────────────┐
-                    │     FastAPI Server        │
-                    │   (Job Orchestrator)      │
-                    └─────────────┬─────────────┘
-                                  │
-                    ┌─────────────┴─────────────┐
-                    │      Redis Queue          │
-                    └─────────────┬─────────────┘
-                                  │
-                    ┌─────────────┴─────────────┐
-                    │    Worker Processes       │
-                    │  (Test Executors)         │
-                    └─────────────┬─────────────┘
-                                  │
-                    ┌─────────────┴─────────────┐
-                    │    BrowserStack API       │
-                    │   (Test Execution)        │
-                    └───────────────────────────┘
+CLI/API → FastAPI Server → Redis Queue → Workers → BrowserStack
+                ↓
+          PostgreSQL Database
+```
+
+## Quick Start
+
+### How It Works
+
+1. **Deploy Apps**: Place mobile apps in `/tmp/apps/{version}.apk` or configure web URLs in tests
+2. **Submit Jobs**: Use CLI or API to queue AppWright tests for execution
+3. **Automatic Execution**: Workers run tests on BrowserStack with real devices/browsers
+4. **Monitor Results**: Get execution videos, pass/fail status, and detailed logs
+
+### Application Types
+
+**Web Applications:**
+```bash
+# Test file specifies URL: await device.goto('https://myapp.com')
+qgjob submit --org-id "myorg" --app-version-id "v1.0" \
+  --test "web-test.spec.js" --target browserstack
+```
+
+**Mobile Applications:**
+```bash
+# 1. Deploy app with version-based naming
+cp builds/myapp.apk /tmp/apps/v1.0.apk
+
+# 2. Submit test (system finds and uploads app automatically)
+qgjob submit --org-id "myorg" --app-version-id "v1.0" \
+  --test "mobile-test.spec.js" --target device
 ```
 
 ## Prerequisites
 
-**Required Infrastructure:**
 - Python 3.8+
 - PostgreSQL 12+ (running and accessible)
 - Redis 6+ (running and accessible)
-- BrowserStack Account with valid credentials
+- BrowserStack Account with Automate plan
 
-**Important:** This is a production application that requires all dependencies to be properly configured. The application will fail to start if any required component is missing.
+**Important:** This is a production application that requires all dependencies. The application will fail to start if any component is missing.
 
-## Installation
+## Installation & Setup
 
-### 1. Clone and Setup
-
+### 1. Basic Setup
 ```bash
 git clone <repository-url>
 cd qgjob
@@ -66,54 +70,32 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 2. Database Setup (PostgreSQL)
+### 2. Infrastructure Setup
 
-**Install PostgreSQL:**
+**PostgreSQL:**
 ```bash
-# Ubuntu/Debian
+# Install (Ubuntu/Debian)
 sudo apt-get install postgresql postgresql-contrib
 
-# macOS
-brew install postgresql
-
-# Windows - Download from https://www.postgresql.org/download/windows/
+# Create database
+createdb qgjob
+createuser qgjob_user
 ```
 
-**Create Database:**
-```sql
-CREATE DATABASE qgjob;
-CREATE USER qgjob_user WITH PASSWORD 'secure_password';
-GRANT ALL PRIVILEGES ON DATABASE qgjob TO qgjob_user;
-```
-
-### 3. Redis Setup
-
-**Install Redis:**
+**Redis:**
 ```bash
-# Ubuntu/Debian
+# Install and start
 sudo apt-get install redis-server
-
-# macOS
-brew install redis
-
-# Docker (alternative)
-docker run -d -p 6379:6379 --name redis redis:alpine
-```
-
-**Start Redis:**
-```bash
 redis-server
 ```
 
-### 4. BrowserStack Setup
-
+**BrowserStack:**
 1. Create account at https://www.browserstack.com/
 2. Get credentials from Account → Settings → Automate
-3. Note your username and access key
 
-### 5. Environment Configuration
+### 3. Environment Configuration
 
-**Create `.env` file:**
+Create `.env` file:
 ```env
 # Database (Required)
 DATABASE_URL=postgresql://qgjob_user:secure_password@localhost:5432/qgjob
@@ -121,168 +103,145 @@ DATABASE_URL=postgresql://qgjob_user:secure_password@localhost:5432/qgjob
 # Redis (Required)
 REDIS_URL=redis://localhost:6379
 
-# API Configuration
-QGJOB_API_URL=http://localhost:8000
-
 # BrowserStack Credentials (Required)
 BROWSERSTACK_USERNAME=your_actual_username
 BROWSERSTACK_ACCESS_KEY=your_actual_access_key
 
 # Application Settings
-BUILD_NAME=QualGent-Test-Build
-PROJECT_NAME=QualGent
 APP_STORAGE_DIR=/tmp/apps
-TEST_SCRIPTS_DIR=tests
-MAX_JOB_RETRIES=3
-WORKER_TIMEOUT_HOURS=1
 LOG_LEVEL=INFO
 ```
 
-**⚠️ Important:** Replace placeholder values with actual credentials. The application will not start with default placeholder values.
-
-### 6. Initialize Database
+### 4. Initialize & Run
 
 ```bash
+# Initialize database
 python -c "from src.qgjob.database import create_tables; create_tables()"
+
+# Start services (both required)
+python -m src.qgjob.main &      # API Server
+python -m src.qgjob.worker &    # Worker Process
 ```
 
-## Running the Application
+## Mobile App Testing
 
-### Start API Server
+### App Deployment Model
+
+Mobile apps use a **pre-deployment model**: apps must be placed in the storage directory before submitting tests.
+
+**App Storage Convention:**
 ```bash
-python -m src.qgjob.main
+# Naming: APP_STORAGE_DIR/{app_version_id}.apk
+/tmp/apps/v1.2.3.apk          # For --app-version-id "v1.2.3"
+/tmp/apps/release-2024.apk    # For --app-version-id "release-2024"
 ```
 
-### Start Worker Process
+**Workflow:**
 ```bash
-python -m src.qgjob.worker
+# 1. Deploy app with version-based naming
+mkdir -p /tmp/apps
+cp builds/myapp-v1.2.3.apk /tmp/apps/v1.2.3.apk
+
+# 2. Submit test (system finds and uploads app automatically)
+qgjob submit --org-id "myorg" --app-version-id "v1.2.3" \
+  --test "mobile-test.spec.js" --target device
+
+# 3. System automatically:
+# - Finds /tmp/apps/v1.2.3.apk
+# - Uploads to BrowserStack (cached for future tests)
+# - Creates mobile session with app installed
+# - Runs AppWright test on real device
 ```
 
-**Note:** Both processes must be running for the system to function properly.
+**Benefits:** Performance (cached uploads), CI/CD friendly, secure, clear version management.
 
-## Continuous Integration/Continuous Deployment (CI/CD)
+## CI/CD Integration
 
-This project includes a comprehensive GitHub Actions workflow that automatically tests the entire application stack.
+The project includes comprehensive GitHub Actions workflow with automated testing.
 
-### CI/CD Features
-
-- **Automated Testing**: Full end-to-end testing with PostgreSQL and Redis
-- **BrowserStack Integration**: Production testing with real BrowserStack credentials
-- **Service Validation**: Comprehensive validation of all application components
-- **Artifact Collection**: Automatic collection of logs and test reports
-
-### Workflow Triggers
-
-The CI/CD pipeline runs automatically on:
-- Push to `main` or `develop` branches
-- Pull requests to `main` branch
-- Manual workflow dispatch
-
-### Setting Up CI/CD
-
-1. **Configure GitHub Secrets** (required):
+**Setup:**
+1. Configure GitHub Secrets:
    ```
    BROWSERSTACK_USERNAME: your_browserstack_username
    BROWSERSTACK_ACCESS_KEY: your_browserstack_access_key
    ```
 
-2. **View Workflow Status**:
-   - Check the badge above for current build status
-   - Visit the Actions tab in your GitHub repository
+2. Pipeline runs on: push to `main`/`develop`, pull requests, manual dispatch
 
-3. **Review Test Results**:
-   - Workflow generates comprehensive test reports
-   - Application logs are automatically collected as artifacts
+**CI/CD Example:**
+```yaml
+- name: Run AppWright Tests
+  run: |
+    qgjob submit --org-id "$ORG" --app-version-id "$VERSION" \
+      --test "regression.spec.js" --priority 1 --target browserstack > job_output.txt
 
-
-### For Contributors
-
-When contributing to this project:
-1. **All pull requests** trigger the CI/CD pipeline
-2. **Tests must pass** before merging
-3. **Review artifacts** if tests fail for debugging information
-4. **Follow the workflow** for consistent development practices
-
-The CI/CD pipeline ensures that all changes are thoroughly tested in a production-like environment before deployment.
+    JOB_ID=$(grep "Job ID:" job_output.txt | awk '{print $3}')
+    qgjob wait --job-id "$JOB_ID" --timeout 300
+    qgjob status --job-id "$JOB_ID" --verbose
+```
 
 ## Usage
 
 ### CLI Commands
 
-**Submit a Job:**
 ```bash
-qgjob submit --org-id "my-org" --app-version-id "v1.0.0" --test "wikipedia.spec.js" --priority 1 --target browserstack
-```
+# Submit jobs
+qgjob submit --org-id "my-org" --app-version-id "v1.0.0" --test "test.spec.js" --target browserstack
+qgjob submit --org-id "my-org" --app-version-id "v1.0.0" --test "mobile.spec.js" --target device
 
-**Check Job Status:**
-```bash
-qgjob status --job-id "job-uuid"
-```
+# Monitor jobs
+qgjob status --job-id "job-uuid" [--verbose]
+qgjob list --org-id "my-org" [--status failed]
+qgjob wait --job-id "job-uuid" --timeout 300
 
-**List Jobs:**
-```bash
-qgjob list --org-id "my-org"
-qgjob list --status failed
-```
-
-**System Metrics:**
-```bash
+# Manage jobs
+qgjob retry --job-id "job-uuid"
+qgjob cancel --job-id "job-uuid"
 qgjob metrics
 ```
 
 ### REST API
 
-**Submit Job:**
 ```bash
+# Submit job
 curl -X POST http://localhost:8000/jobs \
   -H "Content-Type: application/json" \
-  -d '{
-    "org_id": "my-org",
-    "app_version_id": "v1.0.0",
-    "test_path": "wikipedia.spec.js",
-    "priority": 1,
-    "target": "browserstack"
-  }'
-```
+  -d '{"org_id": "my-org", "app_version_id": "v1.0.0", "test_path": "test.spec.js", "priority": 1, "target": "browserstack"}'
 
-**Health Check:**
-```bash
+# Health check
 curl http://localhost:8000/health
 ```
 
-## Supported Targets
+### Supported Targets
 
 - **browserstack**: Web testing on BrowserStack
 - **device**: Mobile app testing on real devices via BrowserStack
 - **emulator**: Mobile app testing on emulators via BrowserStack
 
-All targets require valid BrowserStack credentials.
+## Example AppWright Test
 
-## Example AppWright Test File
+Sample test file (`tests/wikipedia.spec.js`):
 
-The project includes a sample AppWright test file for demonstration:
+```javascript
+import { test, expect } from "appwright";
 
-- `tests/wikipedia.spec.js` - Wikipedia search and verification test (AppWright reference implementation)
+test("Open Playwright on Wikipedia and verify Microsoft is visible", async ({ device }) => {
+  await device.getByText("Skip").tap();
 
-This test file demonstrates the expected format for AppWright tests that can be submitted to the job orchestrator.
+  const searchInput = device.getByText("Search Wikipedia", { exact: true });
+  await searchInput.tap();
+  await searchInput.fill("playwright");
+
+  await device.getByText("Playwright (software)").tap();
+  await expect(device.getByText("Microsoft")).toBeVisible();
+});
+```
+
+**Key Features:** AppWright framework, device context for mobile-first testing, touch interactions (`.tap()`, `.fill()`), content-based element selection, visual assertions.
+
+**Execution Results:** Creates BrowserStack session, records video, provides detailed results, integrates with CI/CD.
 
 ## Production Deployment
-
-### Environment Requirements
-
-1. **PostgreSQL Database**
-   - Dedicated database instance
-   - Proper backup strategy
-   - Connection pooling for high load
-
-2. **Redis Instance**
-   - Persistent Redis configuration
-   - Memory allocation based on queue size
-   - High availability setup for critical systems
-
-3. **BrowserStack Account**
-   - Sufficient parallel testing limits
-   - Valid subscription with required features
 
 ### Docker Deployment
 
@@ -334,9 +293,16 @@ volumes:
   redis_data:
 ```
 
+### Production Considerations
+
+- **Scalability**: Multiple workers, load balancing, database optimization
+- **Security**: Secure credential management, network security, API authentication
+- **Monitoring**: Application metrics, infrastructure monitoring, alerting
+- **Backup**: Database backups, configuration version control, disaster recovery
+
 ## Troubleshooting
 
-### Application Won't Start
+### Common Issues
 
 **Database Connection Failed:**
 ```
@@ -344,7 +310,6 @@ RuntimeError: Database connection failed: connection to server at "localhost" (1
 ```
 - Verify PostgreSQL is running: `pg_isready`
 - Check DATABASE_URL format: `postgresql://user:password@host:port/database`
-- Ensure database exists and user has permissions
 
 **Redis Connection Failed:**
 ```
@@ -359,29 +324,24 @@ RuntimeError: BrowserStack credentials required: BrowserStack credentials not fo
 ```
 - Set BROWSERSTACK_USERNAME and BROWSERSTACK_ACCESS_KEY
 - Verify credentials are not placeholder values
-- Test credentials on BrowserStack dashboard
 
-### Worker Issues
+**App File Not Found:**
+```
+Error: App file not found for v1.2.3 at path: /tmp/apps/v1.2.3.apk
+```
+- Check naming: `--app-version-id "v1.2.3"` requires `/tmp/apps/v1.2.3.apk`
+- Verify file exists: `ls -la /tmp/apps/`
+- Check permissions: `chmod 644 /tmp/apps/*.apk`
 
 **Worker Not Processing Jobs:**
-- Check worker logs in `qgjob-worker.log`
-- Verify all environment variables are set
-- Ensure BrowserStack account has available parallel sessions
-
-**Jobs Failing:**
-- Check BrowserStack account limits
-- Verify app files exist in APP_STORAGE_DIR
-- Review job error messages in database
+- Check worker logs: `qgjob-worker.log`
+- Verify environment variables are set
+- Ensure BrowserStack account has available sessions
 
 ### Monitoring
 
-**Log Files:**
-- API: `qgjob.log`
-- Worker: `qgjob-worker.log`
-
-**Health Checks:**
-- API: `GET /health`
-- Metrics: `GET /metrics`
+**Log Files:** `qgjob.log` (API), `qgjob-worker.log` (Worker)
+**Health Checks:** `GET /health`, `GET /metrics`
 
 ## API Reference
 
@@ -405,9 +365,9 @@ RuntimeError: BrowserStack credentials required: BrowserStack credentials not fo
 ### Endpoints
 - `POST /jobs` - Submit new job
 - `GET /jobs/{job_id}` - Get job details
-- `GET /jobs` - List jobs with filters
+- `GET /jobs` - List jobs with filters (supports org_id, status, app_version_id, limit, offset)
 - `DELETE /jobs/{job_id}` - Cancel job
-- `POST /jobs/{job_id}/retry` - Retry failed job
+- `GET /jobs/{job_id}/retry` - Retry failed job
 - `GET /health` - Health check
 - `GET /metrics` - System metrics
 

@@ -309,9 +309,6 @@ class TestExecutor:
             if driver:
                 driver.quit()
     
-
-    
-
     
     def _run_web_test_script(self, driver: WebDriver, test_path: str) -> Dict[str, Any]:
         start_time = time.time()
